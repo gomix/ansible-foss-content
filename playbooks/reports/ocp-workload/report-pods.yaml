@@ -1,0 +1,131 @@
+---
+- name: OCP PODs Reporter
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    k8s_api_key: "$(oc whoami -t)"
+    ocp_cluster_api_url: https://api.ocp4.example.com:6443
+
+  tasks:
+  - name: Get All PODs Query
+    kubernetes.core.k8s_info:
+      api_key: "{{ k8s_api_key }}"
+      host: "{{ ocp_cluster_api_url }}"
+      kind: Pod
+      validate_certs: false
+    register: result
+    no_log: true
+
+  - name: "Init PODs List Vars"
+    ansible.builtin.set_fact:
+      all_pods: "{{ result.resources }}"
+      running_pods: []
+      pending_pods: []
+      succeeded_pods: []
+      failed_pods: []
+
+  - name: "Compute PODs Lists Vars"
+    ansible.builtin.set_fact:
+      running_pods: "{{ all_pods | selectattr('status.phase', 'equalto', 'Running') }}"
+      failed_pods: "{{ all_pods | selectattr('status.phase', 'equalto', 'Failed') }}"
+      succeeded_pods: "{{ all_pods | selectattr('status.phase', 'equalto', 'Succeeded') }}"
+      pending_pods: "{{ all_pods | selectattr('status.phase', 'equalto', 'Pending') }}"
+
+  - name: "Init Running PODs QoS List Vars"
+    ansible.builtin.set_fact:
+      running_besteffort_pods: []
+      running_burstable_pods: []
+      running_guaranteed_pods: []
+
+  - name: "Compute PODs QoS Lists Vars"
+    ansible.builtin.set_fact:
+      running_besteffort_pods: "{{ running_pods | selectattr('status.qosClass', 'equalto', 'BestEffort') }}"
+      running_burstable_pods: "{{ running_pods | selectattr('status.qosClass', 'equalto', 'Burstable') }}"
+      running_guaranteed_pods: "{{ running_pods | selectattr('status.qosClass', 'equalto', 'Guaranteed') }}"
+      pending_besteffort_pods: "{{ pending_pods | selectattr('status.qosClass', 'equalto', 'BestEffort') }}"
+      pending_burstable_pods: "{{ pending_pods | selectattr('status.qosClass', 'equalto', 'Burstable') }}"
+      pending_guaranteed_pods: "{{ pending_pods | selectattr('status.qosClass', 'equalto', 'Guaranteed') }}"
+      succeeded_besteffort_pods: "{{ succeeded_pods | selectattr('status.qosClass', 'equalto', 'BestEffort') }}"
+      succeeded_burstable_pods: "{{ succeeded_pods | selectattr('status.qosClass', 'equalto', 'Burstable') }}"
+      succeeded_guaranteed_pods: "{{ succeeded_pods | selectattr('status.qosClass', 'equalto', 'Guaranteed') }}"
+      failed_besteffort_pods: "{{ failed_pods | selectattr('status.qosClass', 'equalto', 'BestEffort') }}"
+      failed_burstable_pods: "{{ failed_pods | selectattr('status.qosClass', 'equalto', 'Burstable') }}"
+      failed_guaranteed_pods: "{{ failed_pods | selectattr('status.qosClass', 'equalto', 'Guaranteed') }}"
+
+  - name: "Print out PODs Lists Vars Sizes"
+    ansible.builtin.debug:
+      msg:
+      - "Running PODs: {{ running_pods|length }}"
+      - "  BestEffort: {{ running_besteffort_pods|length }}"
+      - "  Burstable:  {{ running_burstable_pods|length }}"
+      - "  Guaranteed: {{ running_guaranteed_pods|length }}"
+      - "Pending PODs: {{ pending_pods|length }}"
+      - "  BestEffort: {{ pending_besteffort_pods|length }}"
+      - "  Burstable:  {{ pending_burstable_pods|length }}"
+      - "  Guaranteed: {{ pending_guaranteed_pods|length }}"
+      - "Succeeded PODs: {{ succeeded_pods|length }}"
+      - "  BestEffort: {{ succeeded_besteffort_pods|length }}"
+      - "  Burstable:  {{ succeeded_burstable_pods|length }}"
+      - "  Guaranteed: {{ succeeded_guaranteed_pods|length }}"
+      - "Failed PODs: {{ failed_pods|length }}"
+      - "  BestEffort: {{ failed_besteffort_pods|length }}"
+      - "  Burstable:  {{ failed_burstable_pods|length }}"
+      - "  Guaranteed: {{ failed_guaranteed_pods|length }}"
+      - "All PODs: {{ all_pods|length }}"
+
+  - name: Running PODs
+    ansible.builtin.debug:
+      msg: 
+      - "POD Name: {{ item.metadata.name }}"
+      - "POD Namespace: {{ item.metadata.namespace }}"
+      - "POD Status: {{ item.status.phase }}"
+      - "POD QoS: {{ item.status.qosClass }}"
+      - "Statuses Containers: {{ item.status.containerStatuses | default([]) | length }}"
+      - "Spec Containers: {{ item.spec.containers | length }}"
+      - "Spec Containers Resources: {{ item.spec.containers | selectattr('resources', 'defined') | map(attribute='resources') }}"
+    loop: "{{ running_pods | list }}"
+    loop_control:
+      label: "{{ item.metadata.name }}"
+
+  - name: Pending PODs
+    ansible.builtin.debug:
+      msg: 
+      - "POD Name: {{ item.metadata.name }}"
+      - "POD Namespace: {{ item.metadata.namespace }}"
+      - "POD Status: {{ item.status.phase }}"
+      - "POD QoS: {{ item.status.qosClass }}"
+      - "Statuses Containers: {{ item.status.containerStatuses | default([]) | length }}"
+      - "Spec Containers: {{ item.spec.containers | length }}"
+      - "Spec Containers Resources: {{ item.spec.containers | selectattr('resources', 'defined') | map(attribute='resources') }}"
+    loop: "{{ pending_pods | list }}"
+    loop_control:
+      label: "{{ item.metadata.name }}"
+
+  - name: Succeeded PODs
+    ansible.builtin.debug:
+      msg: 
+      - "POD Name: {{ item.metadata.name }}"
+      - "POD Namespace: {{ item.metadata.namespace }}"
+      - "POD Status: {{ item.status.phase }}"
+      - "POD QoS: {{ item.status.qosClass }}"
+      - "Statuses Containers: {{ item.status.containerStatuses | default([]) | length }}"
+      - "Spec Containers: {{ item.spec.containers | length }}"
+      - "Spec Containers Resources: {{ item.spec.containers | selectattr('resources', 'defined') | map(attribute='resources') }}"
+    loop: "{{ succeeded_pods | list }}"
+    loop_control:
+      label: "{{ item.metadata.name }}"
+
+  - name: Failed PODs
+    ansible.builtin.debug:
+      msg: 
+      - "POD Name: {{ item.metadata.name }}"
+      - "POD Namespace: {{ item.metadata.namespace }}"
+      - "POD Status: {{ item.status.phase }}"
+      - "POD QoS: {{ item.status.qosClass }}"
+      - "Statuses Containers: {{ item.status.containerStatuses | default([]) | length }}"
+      - "Spec Containers: {{ item.spec.containers | length }}"
+      - "Spec Containers Resources: {{ item.spec.containers | selectattr('resources', 'defined') | map(attribute='resources') }}"
+    loop: "{{ failed_pods | list }}"
+    loop_control:
+      label: "{{ item.metadata.name }}"
