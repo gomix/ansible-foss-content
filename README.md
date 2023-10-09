@@ -1,2 +1,2 @@
 # ansible-foss-content
-My ansible foos content
+My ansible foss content
